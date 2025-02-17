@@ -60,7 +60,7 @@ function App() {
   // Fetch conversation history when a conversation is selected
   React.useEffect(() => {
     if (selectedConversation && username) {
-      axios.get('http://chatterbox-backend.vercel.app/api/messages', {
+      axios.get('https://chatterbox-backend.vercel.app/api/messages', {
         params: { user1: username, user2: selectedConversation }
       })
         .then(response => {
@@ -103,13 +103,13 @@ function App() {
   }, [loggedIn, username]);
 
   const handleRegister = () => {
-    axios.post('http://chatterbox-backend.vercel.app/api/register', { username, email, password })
+    axios.post('https://chatterbox-backend.vercel.app/api/register', { username, email, password })
       .then(response => alert(response.data.message))
       .catch(err => setError(err.response?.data?.error || 'Registration error'));
   };
 
   const handleLogin = () => {
-    axios.post('http://chatterbox-backend.vercel.app/api/login', { email, password })
+    axios.post('https://chatterbox-backend.vercel.app/api/login', { email, password })
       .then(response => {
         setToken(response.data.token);
         setLoggedIn(true);
