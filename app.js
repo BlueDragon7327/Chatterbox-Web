@@ -1,5 +1,6 @@
-const socket = io('https://chatterbox-backend.vercel.app/api');
-      
+const backendBaseUrl = "https://chatterbox-backend.vercel.app/api";
+const socket = io('https://chatterbox-backend.vercel.app'); // updated socket connection
+
 function App() {
   // Authentication state
   const [username, setUsername] = React.useState('');
@@ -41,7 +42,7 @@ function App() {
   React.useEffect(() => {
     if (loggedIn && username) {
       socket.emit('registerUser', username);
-      axios.get('https://chatterbox-backend.vercel.app/api/dmList', { params: { user: username } })
+      axios.get(`${backendBaseUrl}/dmList`, { params: { user: username } })
         .then(response => {
           setDmConversations(prev => {
             const convs = { ...prev };
@@ -60,7 +61,7 @@ function App() {
   // Fetch conversation history when a conversation is selected
   React.useEffect(() => {
     if (selectedConversation && username) {
-      axios.get('https://chatterbox-backend.vercel.app/api/messages', {
+      axios.get(`${backendBaseUrl}/messages`, {
         params: { user1: username, user2: selectedConversation }
       })
         .then(response => {
@@ -103,13 +104,13 @@ function App() {
   }, [loggedIn, username]);
 
   const handleRegister = () => {
-    axios.post('https://chatterbox-backend.vercel.app/api/register', { username, email, password })
+    axios.post(`${backendBaseUrl}/register`, { username, email, password })
       .then(response => alert(response.data.message))
       .catch(err => setError(err.response?.data?.error || 'Registration error'));
   };
 
   const handleLogin = () => {
-    axios.post('https://chatterbox-backend.vercel.app/api/login', { email, password })
+    axios.post(`${backendBaseUrl}/login`, { email, password })
       .then(response => {
         setToken(response.data.token);
         setLoggedIn(true);
