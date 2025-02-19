@@ -12,11 +12,642 @@
     <!-- Axios & Socket.IO Client -->
     <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
     <script src="https://cdn.socket.io/4.4.1/socket.io.min.js"></script>
-    <link rel="stylesheet" href="styles.css" />
+    <style>
+      :root {
+          --primary-color: #7C3AED;
+          --primary-light: #8B5CF6;
+          --secondary-color: #1F2937;
+          --accent-color: #4ADE80;
+          --text-primary: #F9FAFB;
+          --text-secondary: #D1D5DB;
+          --bg-primary: #111827;
+          --bg-secondary: #1F2937;
+          --bg-tertiary: #374151;
+          --transition: all 0.3s ease;
+      }
+      
+      * {
+          margin: 0;
+          padding: 0;
+          box-sizing: border-box;
+          font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      }
+      
+      body {
+          background: var(--bg-primary);
+          color: var(--text-primary);
+          min-height: 100vh;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+      }
+      
+      #app {
+          width: 90vw;
+          height: 90vh;
+          background: var(--bg-secondary);
+          border-radius: 24px;
+          display: flex;
+          overflow: hidden;
+          box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+      }
+      
+      /* Sidebar */
+      #sidebar {
+          width: 300px;
+          background: var(--secondary-color);
+          border-right: 1px solid rgba(255, 255, 255, 0.1);
+          display: flex;
+          flex-direction: column;
+      }
+      
+      .brand {
+          padding: 2rem;
+          display: flex;
+          align-items: center;
+          gap: 1rem;
+      }
+      
+      .brand h2 {
+          color: var(--primary-light);
+          font-size: 1.5rem;
+          font-weight: 700;
+      }
+      
+      .brand i {
+          color: var(--primary-light);
+          font-size: 1.8rem;
+      }
+      
+      #dm-list {
+          flex: 1;
+          overflow-y: auto;
+          padding: 1rem;
+      }
+      
+      .section-title {
+          color: var(--text-secondary);
+          font-size: 0.875rem;
+          font-weight: 600;
+          text-transform: uppercase;
+          letter-spacing: 0.05em;
+          margin-bottom: 1rem;
+      }
+      
+      .dm-user {
+          padding: 0.75rem 1rem;
+          border-radius: 12px;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          gap: 0.75rem;
+          margin-bottom: 0.5rem;
+          transition: var(--transition);
+      }
+      
+      .dm-user:hover {
+          background: var(--bg-tertiary);
+      }
+      
+      .dm-user.active {
+          background: var(--primary-color);
+      }
+      
+      .user-avatar {
+          width: 40px;
+          height: 40px;
+          background: var(--primary-light);
+          border-radius: 50%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-weight: 600;
+      }
+      
+      /* Main Area */
+      #main {
+          flex: 1;
+          display: flex;
+          flex-direction: column;
+      }
+      
+      /* Tabs */
+      #tabs {
+          display: flex;
+          justify-content: space-around;
+          padding: 1rem;
+          background: var(--bg-secondary);
+          border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+      }
+      
+      #tabs button {
+          padding: 0.75rem 1.5rem;
+          border: none;
+          border-radius: 12px;
+          background: var(--bg-tertiary);
+          color: var(--text-primary);
+          cursor: pointer;
+          transition: var(--transition);
+      }
+      
+      #tabs button.active {
+          background: var(--primary-color);
+      }
+      
+      #tabs button:hover {
+          background: var(--primary-light);
+      }
+      
+      /* Sections */
+      #dm-section, #messages-section {
+          display: none;
+          flex: 1;
+          flex-direction: column;
+      }
+      
+      #dm-section.active, #messages-section.active {
+          display: flex;
+      }
+      
+      /* New DM Section */
+      #dm-section {
+          justify-content: center;
+          align-items: center;
+      }
+      
+      .send-dm-wrapper {
+          display: flex;
+          flex-direction: column;
+          gap: 1rem;
+          width: 100%;
+          max-width: 400px;
+          padding: 2rem;
+          background: var(--bg-tertiary);
+          border-radius: 12px;
+      }
+      
+      #dm-section input {
+          padding: 1rem;
+          border-radius: 12px;
+          border: none;
+          background: var(--bg-secondary);
+          color: var(--text-primary);
+      }
+      
+      #dm-section button {
+          padding: 1rem;
+          border-radius: 12px;
+          border: none;
+          background: var(--primary-color);
+          color: white;
+          cursor: pointer;
+          transition: var(--transition);
+      }
+      
+      #dm-section button:hover {
+          background: var(--primary-light);
+      }
+      
+      /* Chat Header */
+      #chat-header {
+          padding: 1.5rem 2rem;
+          border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+      }
+      
+      .current-user {
+          display: flex;
+          align-items: center;
+          gap: 1rem;
+      }
+      
+      .user-info h3 {
+          font-size: 1.125rem;
+          font-weight: 600;
+      }
+      
+      .user-info p {
+          color: var(--text-secondary);
+          font-size: 0.875rem;
+      }
+      
+      /* Messages Area */
+      #messages-container {
+          flex: 1;
+          overflow-y: auto;
+      }
+      
+      #messages {
+          padding: 2rem;
+          display: flex;
+          flex-direction: column;
+          gap: 1rem;
+      }
+      
+      .message {
+          max-width: 70%;
+          padding: 1rem;
+          border-radius: 16px;
+          position: relative;
+          animation: fadeIn 0.3s ease-out;
+      }
+      
+      .message.sent {
+          background: var(--primary-color);
+          align-self: flex-end;
+      }
+      
+      .message.received {
+          background: var(--bg-tertiary);
+          align-self: flex-start;
+      }
+      
+      .message-header {
+          margin-bottom: 0.5rem;
+          font-size: 0.875rem;
+          color: var(--text-secondary);
+      }
+      
+      .message-body {
+          font-size: 0.9375rem;
+          line-height: 1.5;
+      }
+      
+      /* Message Input */
+      #message-input {
+          padding: 1.5rem 2rem;
+          background: var(--bg-secondary);
+          border-top: 1px solid rgba(255, 255, 255, 0.1);
+      }
+      
+      .input-wrapper {
+          display: flex;
+          gap: 1rem;
+          align-items: center;
+          background: var(--bg-tertiary);
+          padding: 0.75rem 1.5rem;
+          border-radius: 12px;
+      }
+      
+      #currentMessage {
+          flex: 1;
+          background: none;
+          border: none;
+          color: var(--text-primary);
+          font-size: 0.9375rem;
+          outline: none;
+      }
+      
+      .send-button {
+          background: var(--primary-color);
+          color: white;
+          border: none;
+          padding: 0.75rem 1.5rem;
+          border-radius: 8px;
+          cursor: pointer;
+          transition: var(--transition);
+      }
+      
+      .send-button:hover {
+          background: var(--primary-light);
+      }
+      
+      /* Register Section */
+      #register-section {
+          position: fixed;
+          inset: 0;
+          background: rgba(0, 0, 0, 0.8);
+          backdrop-filter: blur(8px);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          z-index: 1000;
+      }
+      
+      .register-card {
+          background: var(--bg-secondary);
+          padding: 2.5rem;
+          border-radius: 24px;
+          width: 100%;
+          max-width: 400px;
+          text-align: center;
+      }
+      
+      .register-card h2 {
+          margin-bottom: 2rem;
+          color: var(--primary-light);
+      }
+      
+      #username {
+          width: 100%;
+          padding: 1rem;
+          background: var(--bg-tertiary);
+          border: 1px solid rgba(255, 255, 255, 0.1);
+          border-radius: 12px;
+          color: var(--text-primary);
+          margin-bottom: 1rem;
+          outline: none;
+      }
+      
+      .register-button {
+          width: 100%;
+          padding: 1rem;
+          background: var(--primary-color);
+          color: white;
+          border: none;
+          border-radius: 12px;
+          cursor: pointer;
+          font-weight: 600;
+          transition: var(--transition);
+      }
+      
+      .register-button:hover {
+          background: var(--primary-light);
+      }
+      
+      @keyframes fadeIn {
+          from { opacity: 0; transform: translateY(10px); }
+          to { opacity: 1; transform: translateY(0); }
+      }
+    </style>
   </head>
   <body>
     <div id="root"></div>
-    <!-- Inline React Code -->
-    <script type="text/babel", src="app.js"></script>
+    <script type="text/babel">
+      // Use your Render backend URL here:
+      const BACKEND_URL = "https://cb-backend-vjli.onrender.com";
+      
+      const socket = io(BACKEND_URL);
+      
+      function App() {
+        // Authentication state
+        const [username, setUsername] = React.useState('');
+        const [email, setEmail] = React.useState('');
+        const [password, setPassword] = React.useState('');
+        const [token, setToken] = React.useState('');
+        const [loggedIn, setLoggedIn] = React.useState(false);
+        const [error, setError] = React.useState('');
+      
+        // DM-related state
+        const [dmConversations, setDmConversations] = React.useState({}); // { partner: [messages] }
+        const [selectedConversation, setSelectedConversation] = React.useState(null);
+        const [messageInput, setMessageInput] = React.useState('');
+      
+        // New DM form state
+        const [newDMRecipient, setNewDMRecipient] = React.useState('');
+      
+        // Active tab: "messages" or "newDM"
+        const [activeTab, setActiveTab] = React.useState('messages');
+      
+        // Refs for scrolling messages area
+        const messagesEndRef = React.useRef(null);
+        const messagesContainerRef = React.useRef(null);
+      
+        // Fetch DM list upon login
+        React.useEffect(() => {
+          if (loggedIn && username) {
+            socket.emit('registerUser', username);
+            axios.get(`${BACKEND_URL}/api/dmList`, { params: { user: username } })
+              .then(response => {
+                setDmConversations(prev => {
+                  const convs = { ...prev };
+                  response.data.forEach(partner => {
+                    if (!convs[partner]) {
+                      convs[partner] = [];
+                    }
+                  });
+                  return convs;
+                });
+              })
+              .catch(err => console.error("Error fetching DM list", err));
+          }
+        }, [loggedIn, username]);
+      
+        // Fetch conversation history when a conversation is selected
+        React.useEffect(() => {
+          if (selectedConversation && username) {
+            axios.get(`${BACKEND_URL}/api/messages`, {
+              params: { user1: username, user2: selectedConversation }
+            })
+              .then(response => {
+                setDmConversations(prev => ({
+                  ...prev,
+                  [selectedConversation]: response.data
+                }));
+              })
+              .catch(error => console.error('Error fetching conversation:', error));
+          }
+        }, [selectedConversation, username]);
+      
+        // Auto-scroll logic (only if user is near the bottom)
+        React.useEffect(() => {
+          if (!selectedConversation) return;
+          const container = messagesContainerRef.current;
+          if (container && messagesEndRef.current) {
+            const isUserNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 50;
+            if (isUserNearBottom) {
+              messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+            }
+          }
+        }, [dmConversations, selectedConversation]);
+      
+        // Listen for incoming messages via socket
+        React.useEffect(() => {
+          socket.on('receiveMessage', (data) => {
+            if (data.sender === username || data.recipient === username) {
+              const partner = data.sender === username ? data.recipient : data.sender;
+              setDmConversations(prev => {
+                const conv = prev[partner] ? [...prev[partner]] : [];
+                conv.push(data);
+                return { ...prev, [partner]: conv };
+              });
+            }
+          });
+          return () => {
+            socket.off('receiveMessage');
+          };
+        }, [loggedIn, username]);
+      
+        const handleRegister = () => {
+          axios.post(`${BACKEND_URL}/api/register`, { username, email, password })
+            .then(response => alert(response.data.message))
+            .catch(err => setError(err.response?.data?.error || 'Registration error'));
+        };
+      
+        const handleLogin = () => {
+          axios.post(`${BACKEND_URL}/api/login`, { email, password })
+            .then(response => {
+              setToken(response.data.token);
+              setLoggedIn(true);
+              alert(response.data.message);
+              socket.emit('registerUser', username);
+            })
+            .catch(err => setError(err.response?.data?.message || 'Login error'));
+        };
+      
+        const handleSendMessage = () => {
+          if (!selectedConversation) {
+            alert("Select a conversation first");
+            return;
+          }
+          if (messageInput.trim() !== '') {
+            const dmData = { sender: username, recipient: selectedConversation, message: messageInput };
+            socket.emit('sendMessage', dmData);
+            setMessageInput('');
+          }
+        };
+      
+        const handleStartNewDM = () => {
+          if (newDMRecipient.trim() !== '') {
+            if (!dmConversations[newDMRecipient]) {
+              setDmConversations(prev => ({ ...prev, [newDMRecipient]: [] }));
+            }
+            setSelectedConversation(newDMRecipient);
+            setActiveTab('messages');
+            setNewDMRecipient('');
+          }
+        };
+      
+        // If not logged in, show registration/login overlay
+        if (!loggedIn) {
+          return (
+            <div id="register-section">
+              <div className="register-card">
+                <h2>Chatterbox</h2>
+                {error && <div className="error">{error}</div>}
+                <input 
+                  id="username"
+                  type="text" 
+                  placeholder="Username" 
+                  value={username} 
+                  onChange={(e) => setUsername(e.target.value)} 
+                />
+                <input 
+                  id="username"
+                  type="email" 
+                  placeholder="Email" 
+                  value={email} 
+                  onChange={(e) => setEmail(e.target.value)} 
+                />
+                <input 
+                  id="username"
+                  type="password" 
+                  placeholder="Password" 
+                  value={password} 
+                  onChange={(e) => setPassword(e.target.value)} 
+                />
+                <button className="register-button" onClick={handleRegister}>Register</button>
+                <button className="register-button" onClick={handleLogin}>Login</button>
+              </div>
+            </div>
+          );
+        }
+      
+        // Main UI
+        return (
+          <div id="app">
+            {/* Sidebar */}
+            <div id="sidebar">
+              <div className="brand">
+                <i className="icon">💬</i>
+                <h2>Chatterbox</h2>
+              </div>
+              <div id="dm-list">
+                <div className="section-title">Direct Messages</div>
+                {Object.keys(dmConversations).map((partner) => (
+                  <div 
+                    key={partner} 
+                    className={`dm-user ${selectedConversation === partner ? 'active' : ''}`}
+                    onClick={() => setSelectedConversation(partner)}
+                  >
+                    <div className="user-avatar">{partner.charAt(0).toUpperCase()}</div>
+                    <span>{partner}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+      
+            {/* Main Area */}
+            <div id="main">
+              <div id="tabs">
+                <button 
+                  className={activeTab === 'messages' ? 'active' : ''} 
+                  onClick={() => setActiveTab('messages')}
+                >
+                  Messages
+                </button>
+                <button 
+                  className={activeTab === 'newDM' ? 'active' : ''} 
+                  onClick={() => setActiveTab('newDM')}
+                >
+                  New DM
+                </button>
+              </div>
+      
+              {/* Messages Section */}
+              <div id="messages-section" className={activeTab === 'messages' ? 'active' : ''}>
+                <div id="chat-header">
+                  <div className="current-user">
+                    <div className="user-avatar">{selectedConversation ? selectedConversation.charAt(0).toUpperCase() : '?'}</div>
+                    <div className="user-info">
+                      <h3>{selectedConversation || 'No Conversation Selected'}</h3>
+                      {selectedConversation && <p>Chatting with {selectedConversation}</p>}
+                    </div>
+                  </div>
+                </div>
+                <div id="messages-container" ref={messagesContainerRef}>
+                  <div id="messages">
+                    {selectedConversation && dmConversations[selectedConversation] && dmConversations[selectedConversation].length > 0 ? (
+                      dmConversations[selectedConversation].map((msg, index) => (
+                        <div key={index} className={`message ${msg.sender === username ? 'sent' : 'received'}`}>
+                          <div className="message-header">{msg.sender}</div>
+                          <div className="message-body">{msg.message}</div>
+                        </div>
+                      ))
+                    ) : (
+                      <div style={{ textAlign: 'center', marginTop: '2rem', color: 'var(--text-secondary)' }}>
+                        No messages yet.
+                      </div>
+                    )}
+                    <div ref={messagesEndRef} />
+                  </div>
+                </div>
+                <div id="message-input">
+                  <div className="input-wrapper">
+                    <input 
+                      id="currentMessage"
+                      type="text" 
+                      placeholder="Type a message" 
+                      value={messageInput} 
+                      onChange={(e) => setMessageInput(e.target.value)} 
+                    />
+                    <button className="send-button" onClick={handleSendMessage}>
+                      Send
+                    </button>
+                  </div>
+                </div>
+              </div>
+      
+              {/* New DM Section */}
+              <div id="dm-section" className={activeTab === 'newDM' ? 'active' : ''}>
+                <div className="send-dm-wrapper">
+                  <input 
+                    type="text" 
+                    placeholder="Recipient's username" 
+                    value={newDMRecipient} 
+                    onChange={(e) => setNewDMRecipient(e.target.value)} 
+                  />
+                  <button onClick={handleStartNewDM}>Start DM</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      }
+      
+      ReactDOM.render(<App />, document.getElementById('root'));
+    </script>
   </body>
 </html>
