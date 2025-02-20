@@ -138,6 +138,7 @@
           flex-direction: column;
           height: 100%;
           overflow: hidden; /* Important - prevents overflow of tabs/header */
+          position: relative; /* Important for absolute positioning */
       }
       
       /* Tabs */
@@ -147,6 +148,8 @@
           background: var(--bg-secondary);
           border-bottom: 1px solid rgba(255, 255, 255, 0.1);
           flex-shrink: 0; /* Prevents tabs from shrinking */
+          position: relative;
+          z-index: 5;
       }
       
       #tabs button {
@@ -228,6 +231,9 @@
           justify-content: space-between;
           flex-shrink: 0; /* Prevents header from shrinking */
           background: var(--bg-secondary);
+          position: sticky;
+          top: 0;
+          z-index: 5;
       }
       
       .current-user {
@@ -250,8 +256,9 @@
       #messages-container {
           flex: 1;
           overflow-y: auto; /* This is the scrollable area */
-          height: 100%; 
+          height: calc(100% - 112px); /* Adjust for header and input heights */
           background: var(--bg-secondary);
+          position: relative;
       }
       
       #messages {
@@ -259,6 +266,7 @@
           display: flex;
           flex-direction: column;
           gap: 0.75rem;
+          min-height: 100%;
       }
       
       .message {
@@ -296,6 +304,11 @@
           background: var(--bg-secondary);
           border-top: 1px solid rgba(255, 255, 255, 0.1);
           flex-shrink: 0; /* Prevents input from shrinking */
+          position: sticky;
+          bottom: 0;
+          left: 0;
+          right: 0;
+          z-index: 5;
       }
       
       .input-wrapper {
@@ -469,9 +482,14 @@
           }
         }, [loggedIn, username]);
       
-        // Fetch conversation history when a conversation is selected
+        // Reset scroll and fetch conversation history when a conversation is selected
         React.useEffect(() => {
           if (selectedConversation && username) {
+            // Reset scroll position for the new conversation
+            if (messagesContainerRef.current) {
+              messagesContainerRef.current.scrollTop = 0;
+            }
+            
             axios.get(`${BACKEND_URL}/api/messages`, {
               params: { user1: username, user2: selectedConversation }
             })
@@ -480,12 +498,19 @@
                   ...prev,
                   [selectedConversation]: response.data
                 }));
+                
+                // After loading messages, scroll to bottom
+                setTimeout(() => {
+                  if (messagesEndRef.current) {
+                    messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+                  }
+                }, 100);
               })
               .catch(error => console.error('Error fetching conversation:', error));
           }
         }, [selectedConversation, username]);
       
-        // Auto-scroll logic (only if user is near the bottom)
+        // Auto-scroll logic for new messages (only if user is near the bottom)
         React.useEffect(() => {
           if (!selectedConversation) return;
           const container = messagesContainerRef.current;
@@ -548,6 +573,13 @@
             const dmData = { sender: username, recipient: selectedConversation, message: messageInput };
             socket.emit('sendMessage', dmData);
             setMessageInput('');
+            
+            // Force scroll to bottom after sending message
+            setTimeout(() => {
+              if (messagesEndRef.current) {
+                messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+              }
+            }, 50);
           }
         };
         
@@ -566,6 +598,19 @@
             setSelectedConversation(newDMRecipient);
             setActiveTab('messages');
             setNewDMRecipient('');
+          }
+        };
+        
+        const selectConversation = (partner) => {
+          // Only fetch if changing to a different conversation
+          if (selectedConversation !== partner) {
+            setSelectedConversation(partner);
+            
+            // Make sure we're in messages tab
+            setActiveTab('messages');
+            
+            // Reset message input when switching conversations
+            setMessageInput('');
           }
         };
       
@@ -619,7 +664,7 @@
                   <div 
                     key={partner} 
                     className={`dm-user ${selectedConversation === partner ? 'active' : ''}`}
-                    onClick={() => setSelectedConversation(partner)}
+                    onClick={() => selectConversation(partner)}
                   >
                     <div className="user-avatar">{partner.charAt(0).toUpperCase()}</div>
                     <span>{partner}</span>
@@ -709,6 +754,7 @@
                     placeholder="Recipient's username" 
                     value={newDMRecipient} 
                     onChange={(e) => setNewDMRecipient(e.target.value)} 
+                    onKeyPress={(e) => e.key === 'Enter' && handleStartNewDM()}
                   />
                   <button onClick={handleStartNewDM}>Start DM</button>
                 </div>
