@@ -1,0 +1,434 @@
+:root {
+    --primary-color: #7C3AED;
+    --primary-light: #8B5CF6;
+    --secondary-color: #1F2937;
+    --accent-color: #4ADE80;
+    --text-primary: #F9FAFB;
+    --text-secondary: #D1D5DB;
+    --bg-primary: #111827;
+    --bg-secondary: #1F2937;
+    --bg-tertiary: #374151;
+    --transition: all 0.3s ease;
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+body {
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+#app {
+    width: 90vw;
+    height: 90vh;
+    background: var(--bg-secondary);
+    border-radius: 24px;
+    display: flex;
+    overflow: hidden;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+}
+
+/* Sidebar - Fixed position like Discord */
+#sidebar {
+    width: 300px;
+    height: 100%;
+    background: var(--secondary-color);
+    border-right: 1px solid rgba(255, 255, 255, 0.1);
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0; /* Prevents sidebar from shrinking */
+}
+
+.brand {
+    padding: 1.5rem;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.brand h2 {
+    color: var(--primary-light);
+    font-size: 1.5rem;
+    font-weight: 700;
+}
+
+.brand i {
+    color: var(--primary-light);
+    font-size: 1.8rem;
+}
+
+#dm-list {
+    flex: 1;
+    overflow-y: auto; /* Scrollable DM list */
+    padding: 1rem;
+    display: flex;
+    flex-direction: column;
+}
+
+.section-title {
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 1rem;
+    padding: 0 0.5rem;
+}
+
+.dm-user {
+    padding: 0.75rem 1rem;
+    border-radius: 4px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 0.5rem;
+    transition: var(--transition);
+}
+
+.dm-user:hover {
+    background: var(--bg-tertiary);
+}
+
+.dm-user.active {
+    background: var(--primary-color);
+}
+
+.user-avatar {
+    width: 32px;
+    height: 32px;
+    background: var(--primary-light);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 600;
+    font-size: 0.875rem;
+}
+
+/* Main Area - Discord Style Layout */
+#main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    overflow: hidden; /* Important - prevents overflow of tabs/header */
+    position: relative; /* Important for absolute positioning */
+}
+
+/* Tabs */
+#tabs {
+    display: flex;
+    padding: 0.75rem 1rem;
+    background: var(--bg-secondary);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    flex-shrink: 0; /* Prevents tabs from shrinking */
+    position: relative;
+    z-index: 5;
+}
+
+#tabs button {
+    padding: 0.5rem 1rem;
+    border: none;
+    border-radius: 4px;
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    cursor: pointer;
+    transition: var(--transition);
+    margin-right: 0.5rem;
+}
+
+#tabs button.active {
+    background: var(--primary-color);
+}
+
+#tabs button:hover {
+    background: var(--primary-light);
+}
+
+/* Sections */
+#dm-section, #messages-section {
+    display: none;
+    height: 100%;
+    flex-direction: column;
+}
+
+#dm-section.active, #messages-section.active {
+    display: flex;
+}
+
+/* New DM Section */
+#dm-section {
+    justify-content: center;
+    align-items: center;
+    overflow-y: auto;
+}
+
+.send-dm-wrapper {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    width: 100%;
+    max-width: 400px;
+    padding: 2rem;
+    background: var(--bg-tertiary);
+    border-radius: 8px;
+}
+
+#dm-section input {
+    padding: 0.75rem;
+    border-radius: 4px;
+    border: none;
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+}
+
+#dm-section button {
+    padding: 0.75rem;
+    border-radius: 4px;
+    border: none;
+    background: var(--primary-color);
+    color: white;
+    cursor: pointer;
+    transition: var(--transition);
+}
+
+#dm-section button:hover {
+    background: var(--primary-light);
+}
+
+/* Chat Header - Fixed like Discord */
+#chat-header {
+    padding: 1rem 1.5rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-shrink: 0; /* Prevents header from shrinking */
+    background: var(--bg-secondary);
+    position: sticky;
+    top: 0;
+    z-index: 5;
+}
+
+.current-user {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.user-info h3 {
+    font-size: 1rem;
+    font-weight: 600;
+}
+
+.user-info p {
+    color: var(--text-secondary);
+    font-size: 0.75rem;
+}
+
+/* Messages Area - Discord Style Scrolling */
+#messages-container {
+    flex: 1;
+    overflow-y: auto; /* This is the scrollable area */
+    height: calc(100% - 112px); /* Adjust for header and input heights */
+    background: var(--bg-secondary);
+    position: relative;
+}
+
+#messages {
+    padding: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    min-height: 100%;
+}
+
+.message {
+    max-width: 70%;
+    padding: 0.75rem 1rem;
+    border-radius: 8px;
+    position: relative;
+    animation: fadeIn 0.3s ease-out;
+}
+
+.message.sent {
+    background: var(--primary-color);
+    align-self: flex-end;
+}
+
+.message.received {
+    background: var(--bg-tertiary);
+    align-self: flex-start;
+}
+
+.message-header {
+    margin-bottom: 0.3rem;
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+}
+
+.message-body {
+    font-size: 0.875rem;
+    line-height: 1.5;
+}
+
+/* Message Input - Fixed position like Discord */
+#message-input {
+    padding: 1rem 1.5rem;
+    background: var(--bg-secondary);
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    flex-shrink: 0; /* Prevents input from shrinking */
+    position: sticky;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 5;
+}
+
+.input-wrapper {
+    display: flex;
+    gap: 0.75rem;
+    align-items: center;
+    background: var(--bg-tertiary);
+    padding: 0.5rem 1rem;
+    border-radius: 8px;
+}
+
+#currentMessage {
+    flex: 1;
+    background: none;
+    border: none;
+    color: var(--text-primary);
+    font-size: 0.875rem;
+    outline: none;
+    padding: 0.5rem 0;
+}
+
+.send-button {
+    background: var(--primary-color);
+    color: white;
+    border: none;
+    padding: 0.5rem 1rem;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: var(--transition);
+}
+
+.send-button:hover {
+    background: var(--primary-light);
+}
+
+/* Register Section */
+#register-section {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.8);
+    backdrop-filter: blur(8px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+}
+
+.register-card {
+    background: var(--bg-secondary);
+    padding: 2rem;
+    border-radius: 16px;
+    width: 100%;
+    max-width: 350px;
+    text-align: center;
+}
+
+.register-card h2 {
+    margin-bottom: 1.5rem;
+    color: var(--primary-light);
+}
+
+#username {
+    width: 100%;
+    padding: 0.75rem;
+    background: var(--bg-tertiary);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 4px;
+    color: var(--text-primary);
+    margin-bottom: 1rem;
+    outline: none;
+}
+
+.register-button {
+    width: 100%;
+    padding: 0.75rem;
+    background: var(--primary-color);
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: 600;
+    transition: var(--transition);
+    margin-top: 0.5rem;
+}
+
+.register-button:hover {
+    background: var(--primary-light);
+}
+
+.error {
+    background: rgba(220, 38, 38, 0.2);
+    color: #EF4444;
+    padding: 0.5rem;
+    border-radius: 4px;
+    margin-bottom: 1rem;
+}
+
+/* Account Section */
+#account-section {
+    display: none;
+    height: 100%;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+}
+#account-section.active {
+    display: flex;
+}
+.account-wrapper {
+    background: var(--bg-tertiary);
+    padding: 2rem;
+    border-radius: 8px;
+    text-align: center;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(5px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* Discord-style scrollbars */
+::-webkit-scrollbar {
+    width: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: var(--bg-secondary);
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--bg-tertiary);
+    border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--primary-color);
+}
