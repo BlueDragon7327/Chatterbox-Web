@@ -46,6 +46,21 @@ function App() {
   const messagesEndRef = React.useRef(null);
   const messagesContainerRef = React.useRef(null);
 
+  // Add new profile-related state
+  const [profile, setProfile] = React.useState({
+    avatar: '',
+    aboutMe: '',
+    status: 'online',
+    customStatus: '',
+    backgroundColor: '#7C3AED'
+  });
+  const [editingProfile, setEditingProfile] = React.useState(false);
+  const fileInputRef = React.useRef();
+
+  // Add new profile-related states for DM list and selected conversation
+  const [dmProfiles, setDmProfiles] = React.useState({});
+  const [selectedProfile, setSelectedProfile] = React.useState(null);
+
   // Auto-login from cookies on mount
   React.useEffect(() => {
     const savedUsername = getCookie("username");
@@ -77,6 +92,39 @@ function App() {
         .catch(err => console.error("Error fetching DM list", err));
     }
   }, [loggedIn, username]);
+
+  // Fetch profile upon login
+  React.useEffect(() => {
+    if (loggedIn && username) {
+      axios.get(`${BACKEND_URL}/api/profile/${username}`)
+        .then(response => setProfile(response.data.profile))
+        .catch(console.error);
+    }
+  }, [loggedIn, username]);
+
+  // When DM conversations update, fetch each partner's profile if not already fetched
+  React.useEffect(() => {
+    Object.keys(dmConversations).forEach(partner => {
+      if (partner !== username && !dmProfiles[partner]) {
+        axios.get(`${BACKEND_URL}/api/profile/${partner}`)
+          .then(response => {
+            setDmProfiles(prev => ({ ...prev, [partner]: response.data.profile }));
+          })
+          .catch(console.error);
+      }
+    });
+  }, [dmConversations, username]);
+
+  // When selectedConversation changes, fetch that user's profile for the right sidebar
+  React.useEffect(() => {
+    if (selectedConversation && selectedConversation !== username) {
+      axios.get(`${BACKEND_URL}/api/profile/${selectedConversation}`)
+        .then(response => setSelectedProfile(response.data.profile))
+        .catch(err => setSelectedProfile(null));
+    } else {
+      setSelectedProfile(null);
+    }
+  }, [selectedConversation, username]);
 
   // Reset scroll and fetch conversation history when a conversation is selected
   React.useEffect(() => {
@@ -178,9 +226,19 @@ function App() {
       alert("Select a conversation first");
       return;
     }
+    
+    if (selectedConversation === username) {
+      alert("You cannot send messages to yourself");
+      return;
+    }
+
     if (messageInput.trim() !== '') {
       const dmData = { sender: username, recipient: selectedConversation, message: messageInput };
       socket.emit('sendMessage', dmData);
+      
+      // Remove immediate local state update to avoid duplication.
+      // setDmConversations(prev => { ... });   <-- Removed
+      
       setMessageInput('');
       
       // Force scroll to bottom after sending message
@@ -200,13 +258,23 @@ function App() {
   };
 
   const handleStartNewDM = () => {
+    if (newDMRecipient.trim() === username) {
+      alert("You cannot start a DM with yourself");
+      return;
+    }
+    
     if (newDMRecipient.trim() !== '') {
-      if (!dmConversations[newDMRecipient]) {
-        setDmConversations(prev => ({ ...prev, [newDMRecipient]: [] }));
-      }
-      setSelectedConversation(newDMRecipient);
-      setActiveTab('messages');
-      setNewDMRecipient('');
+      // Verify user exists first
+      axios.get(`${BACKEND_URL}/api/profile/${newDMRecipient}`)
+        .then(response => {
+          setDmConversations(prev => ({ ...prev, [newDMRecipient]: [] }));
+          setSelectedConversation(newDMRecipient);
+          setActiveTab('messages');
+          setNewDMRecipient('');
+        })
+        .catch(error => {
+          alert("User not found!");
+        });
     }
   };
   
@@ -220,6 +288,29 @@ function App() {
       
       // Reset message input when switching conversations
       setMessageInput('');
+    }
+  };
+
+  const handleProfileUpdate = async () => {
+    try {
+      const response = await axios.put(`${BACKEND_URL}/api/profile/${username}`, {
+        profile
+      });
+      setProfile(response.data.profile);
+      setEditingProfile(false);
+    } catch (error) {
+      console.error('Error updating profile:', error);
+    }
+  };
+
+  const handleAvatarChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setProfile(prev => ({ ...prev, avatar: reader.result }));
+      };
+      reader.readAsDataURL(file);
     }
   };
 
@@ -275,113 +366,260 @@ function App() {
               className={`dm-user ${selectedConversation === partner ? 'active' : ''}`}
               onClick={() => selectConversation(partner)}
             >
-              <div className="user-avatar">{partner.charAt(0).toUpperCase()}</div>
+              {/* Use an image for avatar if available, else default */}
+              <img 
+                src={dmProfiles[partner]?.avatar || 'default-avatar.png'} 
+                alt="avatar" 
+                className="user-avatar" 
+              />
               <span>{partner}</span>
             </div>
           ))}
         </div>
       </div>
 
-      {/* Main Area - Discord Style Layout */}
-      <div id="main">
-        <div id="tabs">
-          <button 
-            className={activeTab === 'messages' ? 'active' : ''} 
-            onClick={() => setActiveTab('messages')}
-          >
-            Messages
-          </button>
-          <button 
-            className={activeTab === 'newDM' ? 'active' : ''} 
-            onClick={() => setActiveTab('newDM')}
-          >
-            New DM
-          </button>
-          <button 
-            className={activeTab === 'account' ? 'active' : ''} 
-            onClick={() => setActiveTab('account')}
-          >
-            Account
-          </button>
-        </div>
+      {/* Main content container with chat area and right sidebar */}
+      <div style={{ display: 'flex', flex: 1 }}>
+        {/* Chat Area */}
+        <div id="main" style={{ flex: 1 }}>
+          <div id="tabs">
+            <button 
+              className={activeTab === 'messages' ? 'active' : ''} 
+              onClick={() => setActiveTab('messages')}
+            >
+              Messages
+            </button>
+            <button 
+              className={activeTab === 'newDM' ? 'active' : ''} 
+              onClick={() => setActiveTab('newDM')}
+            >
+              New DM
+            </button>
+            <button 
+              className={activeTab === 'account' ? 'active' : ''} 
+              onClick={() => setActiveTab('account')}
+            >
+              Account
+            </button>
+          </div>
 
-        {/* Messages Section - Discord Style with Fixed Header/Input */}
-        <div id="messages-section" className={activeTab === 'messages' ? 'active' : ''}>
-          <div id="chat-header">
-            <div className="current-user">
-              {selectedConversation && (
-                <div className="user-avatar">{selectedConversation.charAt(0).toUpperCase()}</div>
-              )}
-              <div className="user-info">
-                <h3>{selectedConversation || 'No Conversation Selected'}</h3>
-                {selectedConversation && <p>Chatting with {selectedConversation}</p>}
+          {/* Messages Section - Discord Style with Fixed Header/Input */}
+          <div id="messages-section" className={activeTab === 'messages' ? 'active' : ''}>
+            <div id="chat-header">
+              <div className="current-user">
+                {selectedConversation && (
+                  <div className="user-avatar">
+                    <img 
+                      src={selectedProfile && selectedProfile.avatar ? selectedProfile.avatar : 'default-avatar.png'} 
+                      alt={selectedConversation} 
+                      style={{ width: '32px', height: '32px', borderRadius: '50%' }}
+                    />
+                  </div>
+                )}
+                <div className="user-info">
+                  <h3>{selectedConversation || 'No Conversation Selected'}</h3>
+                  {selectedConversation && <p>Chatting with {selectedConversation}</p>}
+                </div>
+              </div>
+              {/* ...existing code... */}
+            </div>
+            
+            {/* Scrollable Messages Container - Discord Style */}
+            <div id="messages-container" ref={messagesContainerRef}>
+              <div id="messages">
+                {selectedConversation && dmConversations[selectedConversation] && dmConversations[selectedConversation].length > 0 ? (
+                  dmConversations[selectedConversation].map((msg, index) => (
+                    <div key={index} className={`message ${msg.sender === username ? 'sent' : 'received'}`}>
+                      <div className="message-header">{msg.sender}</div>
+                      <div className="message-body">{msg.message}</div>
+                    </div>
+                  ))
+                ) : (
+                  <div style={{ textAlign: 'center', marginTop: '2rem', color: 'var(--text-secondary)' }}>
+                    {selectedConversation ? 'No messages yet. Say hello!' : 'Select a conversation to start chatting'}
+                  </div>
+                )}
+                <div ref={messagesEndRef} />
+              </div>
+            </div>
+            
+            {/* Fixed Message Input - Discord Style */}
+            <div id="message-input">
+              <div className="input-wrapper">
+                <input 
+                  id="currentMessage"
+                  type="text" 
+                  placeholder={selectedConversation ? "Message @" + selectedConversation : "Select a conversation first"} 
+                  value={messageInput} 
+                  onChange={(e) => setMessageInput(e.target.value)}
+                  onKeyPress={handleKeyPress}
+                  disabled={!selectedConversation}
+                />
+                <button 
+                  className="send-button" 
+                  onClick={handleSendMessage}
+                  disabled={!selectedConversation}
+                >
+                  Send
+                </button>
               </div>
             </div>
           </div>
-          
-          {/* Scrollable Messages Container - Discord Style */}
-          <div id="messages-container" ref={messagesContainerRef}>
-            <div id="messages">
-              {selectedConversation && dmConversations[selectedConversation] && dmConversations[selectedConversation].length > 0 ? (
-                dmConversations[selectedConversation].map((msg, index) => (
-                  <div key={index} className={`message ${msg.sender === username ? 'sent' : 'received'}`}>
-                    <div className="message-header">{msg.sender}</div>
-                    <div className="message-body">{msg.message}</div>
-                  </div>
-                ))
-              ) : (
-                <div style={{ textAlign: 'center', marginTop: '2rem', color: 'var(--text-secondary)' }}>
-                  {selectedConversation ? 'No messages yet. Say hello!' : 'Select a conversation to start chatting'}
-                </div>
-              )}
-              <div ref={messagesEndRef} />
+
+          {/* New DM Section */}
+          <div id="dm-section" className={activeTab === 'newDM' ? 'active' : ''}>
+            <div className="send-dm-wrapper">
+              <input 
+                type="text" 
+                placeholder="Recipient's username" 
+                value={newDMRecipient} 
+                onChange={(e) => setNewDMRecipient(e.target.value)} 
+                onKeyPress={(e) => e.key === 'Enter' && handleStartNewDM()}
+              />
+              <button onClick={handleStartNewDM}>Start DM</button>
             </div>
           </div>
           
-          {/* Fixed Message Input - Discord Style */}
-          <div id="message-input">
-            <div className="input-wrapper">
-              <input 
-                id="currentMessage"
-                type="text" 
-                placeholder={selectedConversation ? "Message @" + selectedConversation : "Select a conversation first"} 
-                value={messageInput} 
-                onChange={(e) => setMessageInput(e.target.value)}
-                onKeyPress={handleKeyPress}
-                disabled={!selectedConversation}
-              />
-              <button 
-                className="send-button" 
-                onClick={handleSendMessage}
-                disabled={!selectedConversation}
-              >
-                Send
-              </button>
+          {/* Account Section */}
+          <div id="account-section" className={activeTab === 'account' ? 'active' : ''}>
+            <div className="account-wrapper">
+              <h3>Account</h3>
+              <p>Logged in as: {username}</p>
+              <button onClick={handleLogout}>Log Out</button>
+            </div>
+            <div className="profile-section">
+              <div className="profile-header">
+                <div className="profile-avatar-container">
+                  <img 
+                    src={profile.avatar || 'default-avatar.png'} 
+                    alt="Profile" 
+                    className="profile-avatar"
+                  />
+                  {editingProfile && (
+                    <div 
+                      className="avatar-upload"
+                      onClick={() => fileInputRef.current.click()}
+                    >
+                      📷
+                      <input
+                        type="file"
+                        ref={fileInputRef}
+                        hidden
+                        accept="image/*"
+                        onChange={handleAvatarChange}
+                      />
+                    </div>
+                  )}
+                </div>
+                
+                <div className="profile-info">
+                  <h2 className="profile-username">{username}</h2>
+                  <div className="profile-status">
+                    <span className="status-dot"></span>
+                    {profile.customStatus || 'Online'}
+                  </div>
+                </div>
+              </div>
+
+              <div className="profile-content">
+                {editingProfile ? (
+                  <>
+                    <div className="profile-about">
+                      <h3 className="profile-section-title">About Me</h3>
+                      <textarea
+                        value={profile.aboutMe}
+                        onChange={e => setProfile(prev => ({ 
+                          ...prev, 
+                          aboutMe: e.target.value 
+                        }))}
+                        placeholder="Tell us about yourself..."
+                      />
+                    </div>
+                    
+                    <div className="profile-customization">
+                      <div className="profile-status-custom">
+                        <h3 className="profile-section-title">Custom Status</h3>
+                        <input
+                          type="text"
+                          value={profile.customStatus}
+                          onChange={e => setProfile(prev => ({
+                            ...prev,
+                            customStatus: e.target.value
+                          }))}
+                          placeholder="Set a custom status..."
+                        />
+                      </div>
+                      
+                      <div className="color-picker">
+                        <h3 className="profile-section-title">Theme Color</h3>
+                        <input
+                          type="color"
+                          value={profile.backgroundColor}
+                          onChange={e => setProfile(prev => ({
+                            ...prev,
+                            backgroundColor: e.target.value
+                          }))}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="profile-actions">
+                      <button onClick={handleProfileUpdate}>Save Changes</button>
+                      <button onClick={() => setEditingProfile(false)}>Cancel</button>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="profile-about">
+                      <h3 className="profile-section-title">About Me</h3>
+                      <p>{profile.aboutMe || 'No bio yet'}</p>
+                    </div>
+                    <button onClick={() => setEditingProfile(true)}>
+                      Edit Profile
+                    </button>
+                  </>
+                )}
+              </div>
             </div>
           </div>
         </div>
 
-        {/* New DM Section */}
-        <div id="dm-section" className={activeTab === 'newDM' ? 'active' : ''}>
-          <div className="send-dm-wrapper">
-            <input 
-              type="text" 
-              placeholder="Recipient's username" 
-              value={newDMRecipient} 
-              onChange={(e) => setNewDMRecipient(e.target.value)} 
-              onKeyPress={(e) => e.key === 'Enter' && handleStartNewDM()}
-            />
-            <button onClick={handleStartNewDM}>Start DM</button>
-          </div>
-        </div>
-        
-        {/* Account Section */}
-        <div id="account-section" className={activeTab === 'account' ? 'active' : ''}>
-          <div className="account-wrapper">
-            <h3>Account</h3>
-            <p>Logged in as: {username}</p>
-            <button onClick={handleLogout}>Log Out</button>
-          </div>
+        {/* RIGHT SIDEBAR */}
+        <div id="profile-sidebar" style={{
+          width: '300px',
+          background: 'var(--bg-secondary)',
+          padding: '1rem',
+          overflowY: 'auto'
+        }}>
+          {selectedConversation ? (
+            selectedProfile ? (
+              <>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                  <img 
+                    src={selectedProfile.avatar ? selectedProfile.avatar : 'default-avatar.png'} 
+                    alt={selectedConversation} 
+                    style={{ width: '80px', height: '80px', borderRadius: '50%', border: '3px solid var(--primary-color)' }}
+                  />
+                  <div>
+                    <h3>{selectedConversation}</h3>
+                    <p>{selectedProfile.customStatus || selectedProfile.status}</p>
+                  </div>
+                </div>
+                <div style={{ marginTop: '1rem' }}>
+                  <h4>About</h4>
+                  <p>{selectedProfile.aboutMe || 'No bio available.'}</p>
+                </div>
+              </>
+            ) : (
+              <p style={{ textAlign: 'center', color: 'var(--text-secondary)' }}>
+                Loading profile…
+              </p>
+            )
+          ) : (
+            <p style={{ textAlign: 'center', color: 'var(--text-secondary)' }}>
+              Select a conversation to see profile details.
+            </p>
+          )}
         </div>
       </div>
     </div>
