@@ -1,5 +1,5 @@
 // Use your Render backend URL here:
-const BACKEND_URL = "https://cb-backend-vjli.onrender.com";
+const BACKEND_URL = "http://localhost:3003";
       
 const socket = io(BACKEND_URL);
 
@@ -41,6 +41,7 @@ function App() {
 
   // Active tab: "messages", "newDM", or "account"
   const [activeTab, setActiveTab] = React.useState('messages');
+  const [settingsTab, setSettingsTab] = React.useState('account');
 
   // Refs for scrolling messages area
   const messagesEndRef = React.useRef(null);
@@ -60,6 +61,63 @@ function App() {
   // Add new profile-related states for DM list and selected conversation
   const [dmProfiles, setDmProfiles] = React.useState({});
   const [selectedProfile, setSelectedProfile] = React.useState(null);
+
+  // Add new state (partnerTyping) plus a ref (typingTimeoutRef) to manage the typing indicator.
+  const [partnerTyping, setPartnerTyping] = React.useState("");
+  const typingTimeoutRef = React.useRef(null);
+
+  // Add themes preset object and new state for tracking the current theme
+  const themes = {
+    default: {
+      '--primary-color': '#7C3AED',
+      '--primary-light': '#8B5CF6',
+      '--bg-secondary': '#1F2937',
+      '--bg-tertiary': '#374151',
+      '--accent-color': '#4ADE80'
+    },
+    sunrise: {
+      '--primary-color': '#FF4500',
+      '--primary-light': '#FF6347',
+      '--bg-secondary': 'linear-gradient(135deg, #FF5F6D, #FFC371)',
+      '--bg-tertiary': '#FF4500',
+      '--accent-color': '#FFD700'
+    },
+    aurora: {
+      '--primary-color': '#00BFFF',
+      '--primary-light': '#1E90FF',
+      '--bg-secondary': 'linear-gradient(135deg, #1FA2FF, #12D8FA, #A6FFCB)',
+      '--bg-tertiary': '#1E90FF',
+      '--accent-color': '#00FF7F'
+    },
+    nebula: {
+      '--primary-color': '#8A2BE2',
+      '--primary-light': '#9370DB',
+      '--bg-secondary': 'linear-gradient(135deg, #654ea3, #eaafc8)',
+      '--bg-tertiary': '#8A2BE2',
+      '--accent-color': '#FFD700'
+    },
+    cyberpunk: {
+      '--primary-color': '#FF00FF',
+      '--primary-light': '#EE82EE',
+      '--bg-secondary': 'linear-gradient(135deg, #0f0c29, #302b63, #24243e)',
+      '--bg-tertiary': '#333',
+      '--accent-color': '#00FFFF'
+    }
+  };
+  const [currentTheme, setCurrentTheme] = React.useState('default');
+
+  function applyTheme(themeName) {
+    const theme = themes[themeName];
+    for (const key in theme) {
+      document.documentElement.style.setProperty(key, theme[key]);
+    }
+    setCurrentTheme(themeName);
+  }
+
+  // Add a new state for DM ordering:
+  const [dmOrder, setDmOrder] = React.useState([]);
+  // NEW: Track unread DM status; true means unread.
+  const [unreadDM, setUnreadDM] = React.useState({});
 
   // Auto-login from cookies on mount
   React.useEffect(() => {
@@ -86,6 +144,8 @@ function App() {
                 convs[partner] = [];
               }
             });
+            // Initialize dmOrder with the DM partners order
+            setDmOrder(response.data);
             return convs;
           });
         })
@@ -171,10 +231,33 @@ function App() {
     socket.on('receiveMessage', (data) => {
       if (data.sender === username || data.recipient === username) {
         const partner = data.sender === username ? data.recipient : data.sender;
+        // Update conversation
         setDmConversations(prev => {
           const conv = prev[partner] ? [...prev[partner]] : [];
           conv.push(data);
           return { ...prev, [partner]: conv };
+        });
+        // Play notification sound if the DM is from someone else
+        if (data.sender !== username) {
+          new Audio('notification.mp3').play().catch(err => console.error("Audio play error:", err));
+          if (Notification.permission === "granted") {
+            new Notification("New DM from " + data.sender, { body: "Click to view the conversation." });
+          } else if (Notification.permission !== "denied") {
+            Notification.requestPermission().then(permission => {
+              if (permission === "granted") {
+                new Notification("New DM from " + data.sender, { body: "Click to view the conversation." });
+              }
+            });
+          }
+          // Mark as unread if this conversation is not currently open.
+          if (selectedConversation !== partner) {
+            setUnreadDM(prev => ({ ...prev, [partner]: true }));
+          }
+        }
+        // Reorder dmOrder so that 'partner' goes to the top
+        setDmOrder(prevOrder => {
+          const filtered = prevOrder.filter(p => p !== partner);
+          return [partner, ...filtered];
         });
       }
     });
@@ -182,6 +265,38 @@ function App() {
       socket.off('receiveMessage');
     };
   }, [loggedIn, username]);
+
+  // Add socket listeners for typing events:
+  React.useEffect(() => {
+    socket.on("typing", (data) => {
+      console.log("Received typing event", data);
+      // Only set typing indicator if the typing sender is your currently selected conversation.
+      if (data.recipient === username && data.sender === selectedConversation) {
+        setPartnerTyping(data.sender);
+      }
+    });
+    socket.on("stopTyping", (data) => {
+      console.log("Received stopTyping event", data);
+      if (data.recipient === username && data.sender === selectedConversation) {
+        setPartnerTyping("");
+      }
+    });
+    return () => {
+      socket.off("typing");
+      socket.off("stopTyping");
+    };
+  }, [username, selectedConversation]);
+
+  const [onlineUsers, setOnlineUsers] = React.useState([]);
+
+  React.useEffect(() => {
+    socket.on('onlineUsers', (list) => {
+      setOnlineUsers(list);
+    });
+    return () => {
+      socket.off('onlineUsers');
+    };
+  }, []);
 
   const handleRegister = () => {
     if (!username || !email || !password) {
@@ -232,12 +347,14 @@ function App() {
       return;
     }
 
+    if (selectedConversation && username) {
+      clearTimeout(typingTimeoutRef.current);
+      socket.emit("stopTyping", { sender: username, recipient: selectedConversation });
+    }
+
     if (messageInput.trim() !== '') {
       const dmData = { sender: username, recipient: selectedConversation, message: messageInput };
       socket.emit('sendMessage', dmData);
-      
-      // Remove immediate local state update to avoid duplication.
-      // setDmConversations(prev => { ... });   <-- Removed
       
       setMessageInput('');
       
@@ -255,6 +372,39 @@ function App() {
       e.preventDefault();
       handleSendMessage();
     }
+  };
+
+  // New function: handleTyping on message input change
+  const handleTyping = () => {
+    if (selectedConversation && username) {
+      console.log("Emitting typing event", { sender: username, recipient: selectedConversation });
+      socket.emit("typing", { sender: username, recipient: selectedConversation });
+      clearTimeout(typingTimeoutRef.current);
+      typingTimeoutRef.current = setTimeout(() => {
+        console.log("Emitting stopTyping event", { sender: username, recipient: selectedConversation });
+        socket.emit("stopTyping", { sender: username, recipient: selectedConversation });
+      }, 2000);
+    }
+  };
+
+  // New function: handle file upload via axios.
+  const handleFileUpload = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const formData = new FormData();
+    formData.append('file', file);
+    axios.post(`${BACKEND_URL}/api/upload`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    })
+    .then(response => {
+      const fileUrl = response.data.fileUrl;
+      // Optionally send a DM with file URL as attachment
+      if (selectedConversation && username) {
+        const dmData = { sender: username, recipient: selectedConversation, message: `File: ${fileUrl}` };
+        socket.emit('sendMessage', dmData);
+      }
+    })
+    .catch(err => console.error("File upload error:", err));
   };
 
   const handleStartNewDM = () => {
@@ -279,15 +429,14 @@ function App() {
   };
   
   const selectConversation = (partner) => {
-    // Only fetch if changing to a different conversation
     if (selectedConversation !== partner) {
+      // Clear any existing typing indicator when switching
+      setPartnerTyping("");
       setSelectedConversation(partner);
-      
-      // Make sure we're in messages tab
       setActiveTab('messages');
-      
-      // Reset message input when switching conversations
       setMessageInput('');
+      // Mark conversation as read:
+      setUnreadDM(prev => ({ ...prev, [partner]: false }));
     }
   };
 
@@ -360,7 +509,7 @@ function App() {
         </div>
         <div id="dm-list">
           <div className="section-title">Direct Messages</div>
-          {Object.keys(dmConversations).map((partner) => (
+          {dmOrder.map((partner) => (
             <div 
               key={partner} 
               className={`dm-user ${selectedConversation === partner ? 'active' : ''}`}
@@ -372,7 +521,12 @@ function App() {
                 alt="avatar" 
                 className="user-avatar" 
               />
-              <span>{partner}</span>
+              <span style={{ fontWeight: (unreadDM[partner] ? 'bold' : 'normal') }}>
+                {partner}
+              </span>
+              { onlineUsers.includes(partner) && (
+                  <span className="online-indicator"></span>
+              )}
             </div>
           ))}
         </div>
@@ -396,10 +550,16 @@ function App() {
               New DM
             </button>
             <button 
-              className={activeTab === 'account' ? 'active' : ''} 
-              onClick={() => setActiveTab('account')}
+              className={activeTab === 'profile' ? 'active' : ''} 
+              onClick={() => setActiveTab('profile')}
             >
-              Account
+              Profile
+            </button>
+            <button 
+              className={activeTab === 'settings' ? 'active' : ''} 
+              onClick={() => setActiveTab('settings')}
+            >
+              Settings
             </button>
           </div>
 
@@ -431,7 +591,20 @@ function App() {
                   dmConversations[selectedConversation].map((msg, index) => (
                     <div key={index} className={`message ${msg.sender === username ? 'sent' : 'received'}`}>
                       <div className="message-header">{msg.sender}</div>
-                      <div className="message-body">{msg.message}</div>
+                      <div className="message-body">
+                        { msg.message.startsWith("File:") ? (
+                            <a
+                              href={msg.message.slice(5).trim()}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                            >
+                              Download File
+                            </a>
+                          ) : (
+                            msg.message
+                          )
+                        }
+                      </div>
                     </div>
                   ))
                 ) : (
@@ -445,13 +618,18 @@ function App() {
             
             {/* Fixed Message Input - Discord Style */}
             <div id="message-input">
+              {partnerTyping && (
+                <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', margin: '0.25rem 1rem' }}>
+                  {partnerTyping} is typing...
+                </p>
+              )}
               <div className="input-wrapper">
                 <input 
                   id="currentMessage"
                   type="text" 
                   placeholder={selectedConversation ? "Message @" + selectedConversation : "Select a conversation first"} 
                   value={messageInput} 
-                  onChange={(e) => setMessageInput(e.target.value)}
+                  onChange={(e) => { setMessageInput(e.target.value); handleTyping(); }}
                   onKeyPress={handleKeyPress}
                   disabled={!selectedConversation}
                 />
@@ -462,6 +640,20 @@ function App() {
                 >
                   Send
                 </button>
+                {/* New File Upload Button */}
+                <button
+                  type="button"
+                  onClick={() => document.getElementById('fileUpload').click()}
+                  style={{ marginLeft: '0.5rem', padding: '0.5rem 1rem' }}
+                >
+                  Upload File
+                </button>
+                <input 
+                  id="fileUpload"
+                  type="file"
+                  style={{ display: 'none' }}
+                  onChange={handleFileUpload}
+                />
               </div>
             </div>
           </div>
@@ -480,106 +672,153 @@ function App() {
             </div>
           </div>
           
-          {/* Account Section */}
-          <div id="account-section" className={activeTab === 'account' ? 'active' : ''}>
-            <div className="account-wrapper">
-              <h3>Account</h3>
-              <p>Logged in as: {username}</p>
-              <button onClick={handleLogout}>Log Out</button>
-            </div>
-            <div className="profile-section">
-              <div className="profile-header">
-                <div className="profile-avatar-container">
-                  <img 
-                    src={profile.avatar || 'default-avatar.png'} 
-                    alt="Profile" 
-                    className="profile-avatar"
-                  />
-                  {editingProfile && (
-                    <div 
-                      className="avatar-upload"
-                      onClick={() => fileInputRef.current.click()}
-                    >
-                      📷
-                      <input
-                        type="file"
-                        ref={fileInputRef}
-                        hidden
-                        accept="image/*"
-                        onChange={handleAvatarChange}
-                      />
+          {/* Profile Section */}
+          <div id="profile-section" className={activeTab === 'profile' ? 'active' : ''}>
+            <div className="account-card">
+              <div className="account-info">
+                <h2>Profile Info</h2>
+                <p>Logged in as: {username}</p>
+              </div>
+              <div className="profile-update">
+                <div className="profile-header">
+                  <div className="profile-avatar-container">
+                    <img 
+                      src={profile.avatar || 'default-avatar.png'} 
+                      alt="Profile" 
+                      className="profile-avatar"
+                    />
+                    {editingProfile && (
+                      <div 
+                        className="avatar-upload"
+                        onClick={() => fileInputRef.current.click()}
+                      >
+                        📷
+                        <input
+                          type="file"
+                          ref={fileInputRef}
+                          hidden
+                          accept="image/*"
+                          onChange={handleAvatarChange}
+                        />
+                      </div>
+                    )}
+                  </div>
+                  <div className="profile-info">
+                    <h2 className="profile-username">{username}</h2>
+                    <div className="profile-status">
+                      <span className="status-dot"></span>
+                      {profile.customStatus || 'Online'}
                     </div>
-                  )}
-                </div>
-                
-                <div className="profile-info">
-                  <h2 className="profile-username">{username}</h2>
-                  <div className="profile-status">
-                    <span className="status-dot"></span>
-                    {profile.customStatus || 'Online'}
                   </div>
                 </div>
-              </div>
-
-              <div className="profile-content">
-                {editingProfile ? (
-                  <>
-                    <div className="profile-about">
-                      <h3 className="profile-section-title">About Me</h3>
-                      <textarea
-                        value={profile.aboutMe}
-                        onChange={e => setProfile(prev => ({ 
-                          ...prev, 
-                          aboutMe: e.target.value 
-                        }))}
-                        placeholder="Tell us about yourself..."
-                      />
-                    </div>
-                    
-                    <div className="profile-customization">
-                      <div className="profile-status-custom">
-                        <h3 className="profile-section-title">Custom Status</h3>
-                        <input
-                          type="text"
-                          value={profile.customStatus}
-                          onChange={e => setProfile(prev => ({
-                            ...prev,
-                            customStatus: e.target.value
+                <div className="profile-content">
+                  {editingProfile ? (
+                    <>
+                      <div className="profile-about">
+                        <h3 className="profile-section-title">About Me</h3>
+                        <textarea
+                          value={profile.aboutMe}
+                          onChange={e => setProfile(prev => ({ 
+                            ...prev, 
+                            aboutMe: e.target.value 
                           }))}
-                          placeholder="Set a custom status..."
+                          placeholder="Tell us about yourself..."
                         />
                       </div>
                       
-                      <div className="color-picker">
-                        <h3 className="profile-section-title">Theme Color</h3>
-                        <input
-                          type="color"
-                          value={profile.backgroundColor}
-                          onChange={e => setProfile(prev => ({
-                            ...prev,
-                            backgroundColor: e.target.value
-                          }))}
-                        />
+                      <div className="profile-customization">
+                        <div className="profile-status-custom">
+                          <h3 className="profile-section-title">Custom Status</h3>
+                          <input
+                            type="text"
+                            value={profile.customStatus}
+                            onChange={e => setProfile(prev => ({
+                              ...prev,
+                              customStatus: e.target.value
+                            }))}
+                            placeholder="Set a custom status..."
+                          />
+                        </div>
+                        
+                        <div className="color-picker">
+                          <h3 className="profile-section-title">Theme Color</h3>
+                          <input
+                            type="color"
+                            value={profile.backgroundColor}
+                            onChange={e => setProfile(prev => ({
+                              ...prev,
+                              backgroundColor: e.target.value
+                            }))}
+                          />
+                        </div>
                       </div>
-                    </div>
 
-                    <div className="profile-actions">
-                      <button onClick={handleProfileUpdate}>Save Changes</button>
-                      <button onClick={() => setEditingProfile(false)}>Cancel</button>
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <div className="profile-about">
-                      <h3 className="profile-section-title">About Me</h3>
-                      <p>{profile.aboutMe || 'No bio yet'}</p>
-                    </div>
-                    <button onClick={() => setEditingProfile(true)}>
-                      Edit Profile
-                    </button>
-                  </>
-                )}
+                      <div className="profile-actions">
+                        <button onClick={handleProfileUpdate}>Save Changes</button>
+                        <button onClick={() => setEditingProfile(false)}>Cancel</button>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="profile-about">
+                        <h3 className="profile-section-title">About Me</h3>
+                        <p>{profile.aboutMe || 'No bio yet'}</p>
+                      </div>
+                      <button onClick={() => setEditingProfile(true)}>
+                        Edit Profile
+                      </button>
+                    </>
+                  )}
+                </div>
               </div>
+            </div>
+          </div>
+
+          {/* Settings Section */}
+          <div id="settings-section" className={activeTab === 'settings' ? 'active' : ''} style={{ display: 'flex', height: '100%' }}>
+            <div className="settings-sidebar">
+              <button 
+                className={settingsTab === 'account' ? 'active' : ''} 
+                onClick={() => setSettingsTab('account')}>
+                  Account
+              </button>
+              <button 
+                className={settingsTab === 'themes' ? 'active' : ''} 
+                onClick={() => setSettingsTab('themes')}>
+                  Themes
+              </button>
+              {/* You may add more settings sidebar items here */}
+            </div>
+            <div className="settings-content">
+              {settingsTab === 'account' && (
+                <div className="account-info">
+                  <h2>Account Info</h2>
+                  <p>Logged in as: {username}</p>
+                  <button onClick={handleLogout}>Log Out</button>
+                </div>
+              )}
+              {settingsTab === 'themes' && (
+                <div className="theme-options" style={{ display: 'flex', flexWrap: 'wrap', gap: '1rem' }}>
+                  {Object.keys(themes).map(themeName => (
+                    <button 
+                      key={themeName} 
+                      onClick={() => applyTheme(themeName)}
+                      style={{
+                        padding: '0.75rem 1rem',
+                        border: 'none',
+                        borderRadius: '6px',
+                        background: currentTheme === themeName ? 'var(--primary-light)' : 'var(--primary-color)',
+                        color: '#fff',
+                        cursor: 'pointer',
+                        transition: 'background 0.3s ease'
+                      }}
+                    >
+                      {themeName.charAt(0).toUpperCase() + themeName.slice(1)}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {/* Other settings content can go here */}
             </div>
           </div>
         </div>
