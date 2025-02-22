@@ -1,5 +1,5 @@
 // Use your Render backend URL here:
-const BACKEND_URL = "http://localhost:3003";
+const BACKEND_URL = "https://cb-backend-vjli.onrender.com";
       
 const socket = io(BACKEND_URL);
 
